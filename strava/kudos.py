@@ -40,7 +40,6 @@ class strava(object):
         self.give_kudos(x)
       self.get_activities()
 
-
   # Refresh List
   def get_activities(self):
     r = self.s.get('{}/dashboard/feed?feed_type=following&athlete_id={}&before={}&cursor={}'.format(BASE, self.athlete_id, self.cursors['before'], self.cursors['cursor']))
