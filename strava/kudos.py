@@ -50,7 +50,6 @@ class strava(object):
   def give_kudos(self, activity):
     payload = {}
     r = self.s.post('{}/feed/activity/{}/kudo'.format(BASE, activity), data = payload, headers = { 'x-csrf-token': self.payload['authenticity_token'] })
-    print(r.content)
     if r.content == '{"success":"true"}':
       print('Gave {} Kudos!'.format(activity))
       return True
@@ -87,7 +86,6 @@ class strava(object):
       # Get Athlete ID & Confirm Logged In
       match = re.search('currentAthleteId =\s+(.*?);', r.content)
       if match is not None:
-        print('match is not None!')
         self.athlete_id = match.group(1)
       else:
         print('Error logging in. Exited.')
