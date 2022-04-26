@@ -2,7 +2,7 @@
     File name: kudos.py
     Author: Andrew Grabbs
     Date created: 4/5/2021
-    Date last modified: 8/2/2021
+    Date last modified: 4/26/2022
     Python Version: 3+
 '''
 
@@ -15,13 +15,12 @@ import html
 import json
 from getpass import getpass
 
-USER = raw_input("Strava Email: ")
+USER = input("Strava Email: ")
 PASS = getpass()
 BASE = 'https://www.strava.com'
 
 class strava(object):
   def __init__(self):
-    print(datetime.datetime.now())
     self.athlete_id = None
     self.end_of_the_line = False
     self.activities = list()
@@ -38,18 +37,20 @@ class strava(object):
     }
     self.s = requests.Session()
     self.auth()
+    print(datetime.datetime.now())
     while len(self.activities) > 0:
       for x in self.activities:
         # Give Kudos
         self.give_kudos(x)
       self.get_activities()
+    print(datetime.datetime.now())
 
   # Refresh List
   def get_activities(self):
     r = self.s.get('{}/dashboard/feed?feed_type=following&athlete_id={}&before={}&cursor={}'.format(BASE, self.athlete_id, self.cursors['before'], self.cursors['cursor']))
     self.get_cursors(r.text)
-    match = [json.loads(html.unescape(x))['activity'] for x in re.findall('data-react-class="Activity" data-react-props="(.*?)"', r.text)]
-    self.activities = [x['id'] for x in match if x['kudosAndComments']['canKudo'] == True and x['kudosAndComments']['hasKudoed'] == False]
+    match = [x for x in json.loads(r.text)['entries'] if x['entity'] == 'Activity']
+    self.activities = [x['activity']['id'] for x in match if x['activity']['kudosAndComments']['canKudo'] == True and x['activity']['kudosAndComments']['hasKudoed'] == False]
 
   # Sending Kudos
   def give_kudos(self, activity):
@@ -65,16 +66,16 @@ class strava(object):
 
   # Get Cursors
   def get_cursors(self, data):
-    match = [json.loads(html.unescape(x)) for x in re.findall('data-react-class="Activity" data-react-props="(.*?)"', data)]
-    if match is not None:
+    match = [x for x in json.loads(data)['entries'] if x['entity'] == 'Activity']
+    if len(match) > 0:
       self.cursors['before'] = match[0]['cursorData']['updated_at']
-      self.cursors['cursor'] = match[len(match)-1]['cursorData']['updated_at']
+      self.cursors['cursor'] = match[-1]['cursorData']['rank']
       return True
     else:
+      print(match)
       self.cursors['before'] = None
       self.cursors['cursor'] = None
       return False
-    print(f'Got Cursors! {self.cursors}')
 
   # Login
   def auth(self):
@@ -87,21 +88,22 @@ class strava(object):
       r = self.s.post('{}/session'.format(BASE), data = self.payload)
       match = re.search('Access to this account is temporarily suspended. Please try again later.', r.text)
       if match is not None:
-        print('Whoops, we\'ve been temporarily suspended.') 
+        print('Whoops, we\'ve been temporarily suspended.')
         sys.exit()
 
       # Get Athlete ID & Confirm Logged In
-      match = re.search('currentAthleteId =\s+(.*?);', r.text)
+      match = re.search('Strava.Models.CurrentAthlete\({"id":(.*?),', r.text)
       if match is not None:
         self.athlete_id = match.group(1)
       else:
         print('Error logging in. Exited.')
         sys.exit()
 
-      # Get Initial Activities
-      self.get_cursors(r.text)
-      match = [json.loads(html.unescape(x))['activity'] for x in re.findall('data-react-class="Activity" data-react-props="(.*?)"', r.text)]
-      self.activities = [x['id'] for x in match if x['kudosAndComments']['canKudo'] == True and x['kudosAndComments']['hasKudoed'] == False]
+      # Get Pre-Fetched Activities
+      match = [x for x in json.loads(html.unescape(re.findall('data-react-class="FeedRouter" data-react-props="(.*?)"', r.text)[0]))['preFetchedEntries'] if x['entity'] == 'Activity']
+      self.activities = [x['activity']['id'] for x in match if x['activity']['kudosAndComments']['canKudo'] == True and x['activity']['kudosAndComments']['hasKudoed'] == False]
+      self.cursors['before'] = match[0]['cursorData']['updated_at']
+      self.cursors['cursor'] = match[-1]['cursorData']['rank']
 
     else:
       print('Error! Unable to get CSRF Token.')
