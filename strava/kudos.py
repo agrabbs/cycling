@@ -6,18 +6,22 @@
     Python Version: 3+
 '''
 
-import requests
-import time
-import datetime
-import sys
 import re
-import html
+import os
+import sys
 import json
+import time
+import requests
+import datetime
 from getpass import getpass
 
 USER = input("Strava Email: ")
 PASS = getpass()
 BASE = 'https://www.strava.com'
+
+# Set Epoch to PST 
+os.environ['TZ'] = 'US/Pacific'
+time.tzset()
 
 class strava(object):
   def __init__(self):
@@ -47,21 +51,29 @@ class strava(object):
 
   # Refresh List
   def get_activities(self):
-    r = self.s.get('{}/dashboard/feed?feed_type=following&athlete_id={}&before={}&cursor={}'.format(BASE, self.athlete_id, self.cursors['before'], self.cursors['cursor']))
+    r = self.s.get(f'{BASE}/dashboard/feed?feed_type=following&athlete_id={self.athlete_id}&before={self.cursors["before"]}&cursor={self.cursors["cursor"]}')
     self.get_cursors(r.text)
-    match = [x for x in json.loads(r.text)['entries'] if x['entity'] == 'Activity']
-    self.activities = [x['activity']['id'] for x in match if x['activity']['kudosAndComments']['canKudo'] == True and x['activity']['kudosAndComments']['hasKudoed'] == False]
+    match = [x for x in json.loads(r.text)['entries'] if x['entity'] in ['Activity', 'GroupActivity']]
+    for x in match:
+        if x['entity'] == 'Activity' and x['activity']['kudosAndComments']['canKudo'] == True and x['activity']['kudosAndComments']['hasKudoed'] == False:
+            self.activities.append(x['activity']['id'])
+        elif x['entity'] == 'GroupActivity':
+            for k, v in x['kudosAndComments'].items():
+                if v['canKudo'] == True and v['hasKudoed'] == False:
+                    self.activities.append(k)
+        else:
+            print('uh oh')
 
   # Sending Kudos
   def give_kudos(self, activity):
     payload = {}
-    r = self.s.post('{}/feed/activity/{}/kudo'.format(BASE, activity), data = payload, headers = { 'x-csrf-token': self.payload['authenticity_token'] })
+    r = self.s.post(f'{BASE}/feed/activity/{activity}/kudo', data = payload, headers = { 'x-csrf-token': self.payload['authenticity_token'] })
     if r.text == '{"success":"true"}':
-      print('Gave {} Kudos!'.format(activity))
+      print(f'Gave {activity} Kudos!')
       return True
     else:
       print(r.text)
-      print('Failed giving kudos to {}!'.format(activity))
+      print(f'Failed giving kudos to {activity}!')
       return False
 
   # Get Cursors
@@ -100,14 +112,16 @@ class strava(object):
         sys.exit()
 
       # Get Pre-Fetched Activities
-      match = [x for x in json.loads(html.unescape(re.findall('data-react-class="FeedRouter" data-react-props="(.*?)"', r.text)[0]))['preFetchedEntries'] if x['entity'] == 'Activity']
-      self.activities = [x['activity']['id'] for x in match if x['activity']['kudosAndComments']['canKudo'] == True and x['activity']['kudosAndComments']['hasKudoed'] == False]
-      self.cursors['before'] = match[0]['cursorData']['updated_at']
-      self.cursors['cursor'] = match[-1]['cursorData']['rank']
+      self.cursors['before'] = time.time() - 259200
+      self.cursors['cursor'] = time.time()
+      self.get_activities()
 
     else:
       print('Error! Unable to get CSRF Token.')
       sys.exit()
 
 if __name__ == '__main__':
-  strava = strava()
+  try:
+    strava = strava()
+  except Exception as e:
+    print(f'ERROR: {e}`')
