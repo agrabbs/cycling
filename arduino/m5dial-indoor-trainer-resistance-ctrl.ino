@@ -1,5 +1,6 @@
 /*
-Peloton style controller for your smart trainer.
+Peloton style controller for your smart trainer utlizing an M5Dial.
+https://shop.m5stack.com/products/m5stack-dial-esp32-s3-smart-rotary-knob-w-1-28-round-touch-screen
 */
 
 #include "M5Dial.h"
